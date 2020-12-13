@@ -1,0 +1,25 @@
+{
+  "name": "buildyourchain",
+  "version": "1.0.0",
+  "description": "Coder sa propre Blockchain depuis zero* en Javascript",
+  "main": "db.js",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "keywords": [
+    "blockchain",
+    "javascript",
+    "cours"
+  ],
+  "author": "Damien Reimert",
+  "license": "CC BY-NC-SA 4.0",
+  "dependencies": {
+    "socket.io": "^3.0.4",
+    "socket.io-client": "^3.0.4",
+    "yargs": "^16.2.0"
+  },
+  "devDependencies": {
+    "tape": "^5.0.1",
+    "tape-promise": "^4.0.0"
+  }
+}
