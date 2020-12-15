@@ -4,24 +4,17 @@ const test = _test(tape) // decorate tape
 const fs = require('fs');
 
 const networkTools = require('./tools/network');
-
-const { exec } = require("child_process");
+const cliTools = require('./tools/cli');
 
 function execCommande(cmd, t) {
-  return new Promise((resolve, reject) => {
-    exec(cmd, (error, stdout, stderr) => {
-      if (error) {
-        t.error(error);
-        if (error.code == 126) {
-          t.comment("Avez-vous fait un `chmod +x db.js` ?");
-        }
-        t.end();
-        return reject(error);
-      }
-      return resolve(stdout);
-    });
+  return cliTools.execCommande(cmd).catch((error) => {
+    t.error(error);
+    if (error.code == 126) {
+      t.comment("Avez-vous fait un `chmod +x db.js` ?");
+    }
+    return Promise.reject(error);
   });
-}
+};
 
 test('Vérification de la version', function (t) {
   return execCommande("./db.js --version", t).then((stdout) => {

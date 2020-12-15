@@ -1,188 +1,201 @@
-# Build Your Chain - P2P
+# Build Your Chain - Consensus
 
 ## Objectif
 
-Les buts de cette étape sont :
+Le but de cette étape est de mettre en place un algorithme de consensus pour notre base de données.
 
-* Transformer notre base de données client / serveur en une base distribuée.
-* Comprendre les problèmes liés aux systèmes distribués.
+## Consensus
 
-## Confiance et défaillance
+À l'étape précédente, nous avons mis en place un système distribué minimal mais qui fonctionne plus ou moins bien car il n'a pas d'algorithme de consensus. Un algorithme de consensus est un algorithme qui va permettre aux noeuds de se mettre d'accord sur une valeur. Par exemple, si deux valeurs différentes sont proposées pour une même clé, l'algorithme doit permettre d'en choisir une.
 
-Dans l'approche par client / serveur, vous devez avoir confiance dans le serveur :
+Ces désaccords peuvent être dû à :
 
-* Il ne va pas altérer les données : les perdre ou les corrompre.
-* Il va être disponible pour vous répondre : accepter de vous répondre, être actif et ne pas subir une panne.
+* des contraintes du monde physique comme la vitesse de la lumière. L'information ne peut pas se téléporter d'un serveur à l'autre, il y a un délai : la latence.
+* Il peut y avoir des dysfonctionnements : pannes de matériel ou corruptions de données.
+* Il y a des humains qui interagissent avec le système et l'infrastructure, ils peuvent être mal informés, incompétents ou malveillants.
 
-Vous devez avoir confiance dans le fait que l'individu ou l'entité qui opère le serveur respecte ces critères. Mais face à des enjeux économiques ou politiques importants, il se peut qu'on ne puisse pas faire confiance à une seule entité.
+Il n'y a pas de d'algorithme de consensus ultime. Pour pouvoir mettre en place un algorithme de consensus, il faut mettre en place des contraintes qui auront un coup en temps ou en ressources.
 
-Pour résister aux pannes ou à une forte demande vous pouvez aussi avoir envie de mettre plusieurs serveurs, chacun pouvant absorber une partie de la charge.
+## Outch ! Ça lag...
 
-La solution utilisée par la blockchain est la distribution. Il n'y a pas de serveur central, tout le monde peut se rajouter au réseau et assurer le rôle de serveur. C'est une base de données distribuées. Distribuer revient à avoir plusieurs serveurs qui se synchronisent entre eux. On ne parle plus de serveur dans ce cas mais de noeuds du réseau. Il n'y a plus besoin d'avoir confiance dans un unique individu mais il faut faire confiance à l'ensemble du système donc à de multiple individus.
+La latence est partout dès qu'il y a communication. L'information ne peut pas aller plus vite que la lumière, sans compter les temps de traitement. Par exemple, à l'heure où j'écris ces lignes, pour l'échange d'un message de ping, il y a 229 millisecondes de latence entre Paris et Tokyo : https://wondernetwork.com/pings. Imaginez maintenant un système distribué de plusieurs milliers de noeuds, le temps que l'information se propage d'un bout à l'autre, il peut se passer plusieurs secondes. Et beaucoup plus si vous voulez transporter une grande qualité d'informations.
 
-#### Essayer de lancer plusieurs fois le serveur. Que ce passe-t'il ? Pourquoi ?
+Maintenant, imaginez : à quelques millisecondes d'écart, deux noeuds du réseau reçoivent pour la clé `Ville` une valeur différentes :
 
-Mettre plusieurs noeuds sur une même machine n'est pas une idée de génie. En production, l'utilité est assez limitée mais en test ou en développement, c'est fort utile à moins de disposer de plusieurs machines.
+* Noeud 1 : Ville / Paris
+* Noeud 2 : Ville / Tokyo
 
-Il faut pouvoir lancer le noeud plusieurs fois avec des configurations différentes.
+L'information se propage de proche en proche jusqu'à confrontation. Un partie des noeuds a associé Ville à Paris et pour l'autre, Ville égale Tokyo.
 
-#### Observer le code source de `db.js`. Lancez plusieurs noeuds en parallèle sans modifier le code source.
+#### Imaginez des solutions possibles. Notez-les, on pourra s'en servir plus tard.
 
-##### Indice : vous connaissez la différence entre '-' et '--' en Bash ?
+#### Lancez la commande `node scenarios/latence.js`.
 
-Vous êtes maintenant en mesure de lancer plusieurs noeuds en parallèle mais ils ne se voient pas et ne se synchronisent pas.
+## Combattre le temps par le temps
 
-## Jouer avec des inconnus
+Dans l'idée initiale, on ne peut pas mettre à jour une valeur. Partant de cette idée, il semble cohérent que la valeur la plus vieille soit la bonne. Je vous propose donc l'algorithme de consensus suivant : on garde la valeur la plus vieille.
 
-Il faut maintenant faire en sorte que nos noeuds se voient et se parlent. Pour cela, il faut savoir comment les contacter. Dans Bitcoin et dans un système distribué plus généralement, on peut ajouter un noeud à tout moment et sans le connaitre.
-
-J'ai ajouté dans le *CLI* deux commandes : `addPeer` et `peers`.
-
-La commande `addPeer` prend un port en paramètre. Ce port sera utiliser pour ajouter un nouveau voisin au noeud. Retourne `false` si le voisin existe déjà, sinon, retourne `true`.
-
-La commande `peers` demande au noeuds de retourner la liste de ses voisins.
-
-#### Déclarez un tableau `neighbors` contenant la liste des ports utilisés par les voisins.
+On n'a pas l'âge d'une valeur pour le moment. Il va falloir la rajouter dans les données stockées mais aussi dans les données échangées pour pouvoir comparer. On ne stocke plus une simple valeur mais un ensemble de valeurs.
 
 ```Javascript
-const neighbors = [];
+db[field] = {
+  value: value,
+  timestamp: Date.now(), // Retourne le timestamp de la date courante
+};
 ```
 
-#### En vous inspirant des commandes déjà présentes dans le noeud, ajoutez dans `db.js` une commande `peers` qui retourne la liste des ports utilisés.
-
-Pour vérifier que la commande fonctionne, vous pouvez initialer le tableau avec des valeurs : `const neighbors = ['a', 'b', 'c'];`.
-
-#### Ajoutez une commande `addPeer` à votre noeud. Dans un premier temps, faites en sorte que cette commande ajoute le port à la liste des voisins.
+Pour commencer, il faut que la commande `set` accepte deux ou trois paramètres. Le troisième paramètre sera le timestamp. Je vous donne le code pour faire ça :
 
 ```Javascript
-const maVariable = 42;
-myArray.push(maVariable);
-// La fonction push ajoute 'maVariable' à la fin du tableau
-```
-
-#### Vérifiez le bon fonctionnement avec la commande `peers`.
-
-Les deux commandes semblent fonctionner ? Parfait, le comportement actuel de `addPeers` correspond au fonctionnement d'une autre fonction : `auth`. `auth` permet à un serveur de s'identifier comme voisin à un autre serveur. Nous verrons plus tard son utilisation
-
-#### Copier la version actuelle de  `addPeers` et renommer la copie `auth`.
-
-Il faut maintenant que les noeuds communiquent entre eux.
-
-Le code suivant permet de créer une nouvelle connexion vers un autre noeud.
-
-```Javascript
-const ioClient = require('socket.io-client');
-
-const socket = ioClient(`http://localhost:${port}`, {
-  path: '/byc'
+socket.on('set', function(field, value, timestamp, callback) {
+  // Dans le cas où il n'y a que deux paramètres, le callback est dans timestamp
+  if (typeof timestamp === 'function') {
+    // on réaffecte les valeurs aux bonnes variables
+    callback = timestamp;
+    timestamp = undefined;
+  }
+  // ...
 });
 ```
 
-Quand la connexion est établie, l'événement `connect` est émit. Vous pouvez observer le *CLI* pour avoir un exemple.
+J'ai modifier le *CLI* pour qu'il supporte un troisième paramètre optionnel à la commande `set`. J'ai aussi modifier la commande `get` du *CLI* pour qu'elle puisse gérer des retours de type valeur unique ou d'un object contenant une valeur *value*.
 
-#### Modifiez la commande `addPeer` de votre noeud pour qu'elle crée une nouvelle connexion.
+#### Modifiez la commande `set` dans `db.js` pour qu'elle supporte deux ou trois paramètres.
 
-Est-ce que le noeud ajouté indique bien une nouvelle connexion ? Oui ? Cool ! Par contre, si vous faites un `peers` sur le noeud ajouté, il n'y a pas le noeud source dans la liste des voisins. On a une commande pour mettre à jour cette liste !
+#### Modifiez la commande `set` pour qu'elle stocke pour chaque clef la valeur et l'horodatage de celle-ci. Modifiez la manière dont la commande traite les clefs déjà définies pour garder la plus vielle.
 
-#### Modifiez la commande `addPeer` pour qu'elle envoie une commande `auth` après la connexion.
+##### Indice : `timestamp = timestamp || Date.now()`. Si *timestamp* n'est pas défini, exécute la fonction *now*.
 
-## Appariement et synchronisation
+Vous pouvez tester avec `node scenarios/latence.js`. Si votre implémentation est correcte, le réseau devrait converger vers une seule valeur.
 
-Nos noeuds maintenant échanger des informations. Vous allez essayer de mettre en place 3 noeuds qui communiquent entre eux et se synchronisent. Par exemple, supposons que vous utilisez les ports 3000, 3001 et 3002.
+Cette solution fonctionne ; tant qu'il n'y a pas de dysfonctionnements ou d'utilisateurs malveillants.
 
-Si vous avez respecter les consignes jusqu'à maintenant, votre noeud est connecté aux autres. Il faut maintenant mettre à jour les autres quand lui-même est modifié.
+### Désynchronisation
 
-Pour commencer, il faut stocker les sockets pour pouvoir écrire à nos contacts.
+Si un noeud a un problème réseau et que des messages sont perdus, il ne sera jamais mis à jours, même s'il utilise la commande `keys`, celle-ci ne retourne pas l'horodatage de la valeur. Si il a une valeur, il la gardera.
 
-#### Déclarer un tableau `sockets` qui contiendra la liste des sockets du noeuds.
+### Attaques
 
-#### Modifiez la commande `addPeer` pour qu'elle stocke la socket dans le tableau `sockets`.
+#### Qu'est-ce qui empêche un individu mal intentionné de forger un message `set` avec un *vieux* horodatage ou si l'horloge de la machine est mal réglée ? Que va t'il se passer ?
 
-#### Modifiez la commande `auth` pour qu'elle stocke la socket dans le tableau `sockets`.
+Cet algorithme fonctionne dans un monde parfait, sans panne et personnes malintentionnées. Essayons de faire plus résistant.
 
-N'oubliez pas d'appliquer la fonction `initSocket` aux sockets que vous créez dans `addPeer`. De préférence après qu'elles soient connectées.
+## Résistance aux pannes
 
-#### Modifiez la méthode `set` pour qu'elle mette à jour les autres pairs.
+Le problème d'une panne réseau est que le noeud ne reçoit pas la mise à jour de la valeur. Une solution est de vérifier régulièrement que l'on a bien la même chose que ses voisins.
 
-##### Indice 1 :
+Vous pouvez voir une illustration en lançant la commande `node scenarios/panne.js`.
+
+Actuellement, la commande `keys` ne retourne que la liste des clés mais pas l'horodatage. Avec celle-ci, on ne peut pas savoir si une clé a changée. Le code suivant permet d'extraire uniquement le champs *timestamp* de chaque clé de la base de données.
+
 ```Javascript
-// Un tableau remplit de choses
-const monTableau = ['a', 'b', 'c', 'd'];
-monTableau.forEach((element, index) => {
-    // Je peux faire quelque-chose pour chaque élément.
-    console.log("L'élément à l'index", index, "du tableau est", element);
-});
+const extractHorodatage = function(db) {
+  return Object.keys(db).reduce(function(result, key) {
+    result[key] = {
+      timestamp: db[key].timestamp
+    };
+    return result;
+  }, {});
+};
+// Si db = {a: {value: 'Dublin', timestamp: 123456789}}
+// retourne : {a: {timestamp: 123456789}}
 ```
 
-##### Indice 2 : Vous pouvez voir comment envoyer une commande `set` dans `cli.js`.
+#### Écrivez une commande `keysAndTime` qui retourne la liste des clés avec l'horodatage.
 
-#### Utilisez le *CLI* pour vérifier que tous les noeuds sont dans le même état. Si vous ne voyez pas comment, regardez le code source.
+Il ne reste plus qu'à appeler la commande la commande `keysAndTime` à la place de `keys` à la synchronisation pour détecter une désynchronisation et la corriger. Quand vous corrigez la valeur, informez vos voisins qui sont peut-être aussi désynchronisés.
 
-##### Indice : Vous avez fait un copier / coller brutal de la commande `set` du *CLI* avouez ? Et ça marche pour la première valeur ! Par contre, si vous essayez avec une seconde valeur, ça ne fonctionne plus. Est-ce que ça a du sens de fermer la socket entre deux noeuds ?
+#### Mettez en place la mécanique de détection et de correction.
 
-Vous avez réussi ? `set` une valeur sur un des noeuds met automatiquement à jour les autres ? Cool !
+##### Indice :
 
-Imaginez trois amis qui essayent de maintenir une connaissance commune du statut relationnel de leurs connaissances. Réfléchissez maintenant à tous les problèmes qui peuvent arriver. Que se passe-t'il si un des amis est malade ou n'a plus de connexion réseau ? Si deux amis reçoivent en même temps des informations différentes pour une même personne ? Combien de temps avant de se synchroniser ?
+```Javascript
+for (let key in object) {
+  if (object.hasOwnProperty(key)) {
+    console.log(object[key]);
+  }
+}
+// Si object vaut : {a: {timestamp: 123456789}}
+// Affiche : {timestamp: 123456789}
+```
 
-Nous verrons comment résoudre ces difficultés à l'étape suivant.
+#### Notifiez les voisins du changement.
 
-## Synchronisation initiale
+#### Vérifier le bon fonctionnement en exécutant `node scenarios/panne.js`.
 
-Lancer deux noeuds et connectez les. Ajouter quelles valeurs. Lancez maintenant un troisième noeud et connectez le aux deux autres.
+## C'est toujours un problème de temps
 
-#### Demander au troisième noeud une valeur définie avant son lancement. Quel est le problème ?
+Dans la vie, je suis plutôt optimiste mais en informatique si ça peut mal se passer, ça se passera mal. Et puis, j'ai besoin de ce ressort scénaristique de fou pour vous amener là où je veux : La solution précédente fonctionne ? Vous êtes sûr ?
 
-# Modifier la commande `auth` et `addPeer` pour qu'à chaque nouvelle connexion entre serveur, une requête `keys` soit envoyée et les couples clé / valeur inconnues ajoutées.
+#### Que se passe-t'il si pour un même timestamp, il y a deux valeurs différentes ?
 
-## Réseauter
+#### Lancez `node scenarios/horloge.js` et observez.
 
-Construire le réseau de noeuds est pénible ? J'ai un outil pour vous !
+Mais on n'a pas envie d'envoyer la valeur à chaque synchronisation. Imaginez si c'est un fichier de plusieurs centaines de Mo ! À la place, on va utiliser l'empreinte de la valeur qui est produite par une fonction de hachage.
 
-Vous avez pu remarquer un dossier `tools` et un `tools.js` apparaitre à cette étape. Il va nous aider :
+## Prenons un peu de *hash*
+
+Une fonction de hachage est une fonction qui prend en entrée un ensemble de données et retourne une empreinte, aussi appelée *hash*. L'empreinte respecte deux principes : Elle est unique pour un ensemble de données d'entrée, et une empreinte donnée ne permet pas de remonter à l'ensemble initial. On parle de non-collision et de non calculabilité de la pré-image. Cette empreinte est de taille fixe quelque-soit l'entrée. Une fonction couramment utilisé est SHA. Voici quelques exemples d'empreinte :
 
 ```Bash
-# Lance une clique de trois serveurs
-./tools.js run
+> echo "Blockchain" | shasum
+# efcf8baf5959ad1ebc7f4950425ef1c2eae9cbd9  -
 
-# Lance un anneau de 5 serveurs
-./tools.js run "a-b, b-c, c-d, d-e, e-a"
+> echo "Block" | shasum
+# d1a6b1157e37bdaad78bec4c3240f0d6c576ad21  -
 
-# Lance une étoile de 6 serveurs avec a au milieu
-./tools.js run "a-b, a-c, a-d, a-e, a-f"
-
-# Vous pouvez être plus inventif sur les noms
-./tools.js run "bob-alice, R2D2-C3PO, C3PO-BB8, 42-1337"
+> echo "Vous commencez à voir le principe ?" | shasum
+# 25abec7ced7642b886c1bffbc710cc3439f23ab7  -
 ```
 
-Les logs et les erreurs sont redirigés dans des fichiers de la forme `id.log` et `id.err` du dossier `logs`. Vous pouvez les afficher en temps réel avec `tail -f logs/id.log`.
+Une propriété intéressante est qu'une petite modification dans l'entrée change totalement l'empreinte :
+
+```Bash
+> echo "Blockchain" | shasum
+# efcf8baf5959ad1ebc7f4950425ef1c2eae9cbd9  -
+
+> echo "blockchain" | shasum
+# ea5f179324c233b002fa8ac4201fa216001515e5  -
+```
+
+Les fonctions de hachage sont couramment utilisées pour vérifier que des données n'ont pas été corrompu lors d'un téléchargement par exemple. Le code suivant permet de produire une empreinte en Javascrip.
+
+```Javascript
+const crypto = require('crypto');
+
+// Retourne l'empreinte de data.
+const getHash = function getHash(data) {
+  return crypto.createHash('sha256').update(data, 'utf8').digest('hex');
+}
+```
+
+## Spoiler : cette fois, c'est la bonne ... avant l'étape suivante.
+
+#### Ajoutez un champs `hash` dans votre base de données.
+
+#### Modifiez `set` pour calculer l'empreinte de la valeur.
+
+#### Modifiez `set` pour qu'en cas de timestamp identique mais hash différent, on retient le plus petit.
+
+#### Éditez la commande `keysAndTime` pour ajouter le hash.
+
+#### Modifiez votre algorithme de synchronisation pour vérifier le hash et appliquer les modifications comme pour `set`.
+
+#### Lancez `node scenarios/horloge.js` et observez.
+
+Vous êtes maintenant résistant à la panne. Enfin, pas à l'instant T mais c'est déjà pas mal !
 
 ## Conclusion
 
-Nous avons un système qui marche plus ou moins, dans lequel n'importe quel noeud peut se connecter et reconstruire la base de données. C'est un système distribué minimaliste mais il ne fonctionne que dans un monde idéal où il n'y a pas de pannes ni de personnes mal intentionnées.
+Nous avons mis en place un algorithme de consensus qui résiste aux problèmes de latence et de pannes réseaux. Pour résister, nous avons ajouter des données et mis en place des échanges d'informations supplémentaires, ce qui représente un coût.
+
+Nous n'avons pas traité le troisième cas de désaccords dù à un utilisateur potentiellement malveillants. Nous traiteront se problème à l'étape suivante.
 
 ## Suite
 
-Aller à l'étape 2 : `git checkout etape-2`.
+Aller à l'étape 3 : `git checkout etape-3`.
 
 Pour continuer à lire le sujet :
 
 * soit vous lisez le fichier `README.md` sur votre machine.
-* soit sur GitHub, au-dessus de la liste des fichiers, vous pouvez cliquer sur `main` et sélectionner `etape-2`.
-
-## Pour aller plus loin
-
-Pour continuer cette étape, vous pouvez essayer de discuter avec vos camarades pour étendre le système entre plusieurs machines.
-
-Vous pouvez mettre en place des backups sur disque de la base de données.
-
-### Partager ses voisins (bonus)
-
-Ajouter les voisins à chaque noeud et à chaque fois que vous relancez les noeud est assez pénible ? Dans un vrai système pair à pair, *peer to peer* en anglais, abrégé P2P, la liste des voisins est envoyée aux nouveaux qui peuvent alors s'y connecter tout seul.
-
-#### Faites des commandes `peers` sur vos différents noeuds. Voyez-vous le problème ?
-
-#### Implémentez une commande `auth` qui a en paramètre un port. Cette commande permet à un noeud de s'identifier auprès d'un autre et d'indiquer celui-ci dans la liste de ses voisins.
-
-#### Vous pouvez aussi modifier le code pour que la synchronisation initiale ne se fasse qu'en cas d'appel à `auth`.
-
-#### Ajoutez une option `auto-connect` en regardant comment fonctionne `version` pour vous connecter automatiquement aux voisins de vos nouveaux voisins.
+* soit sur GitHub, au-dessus de la liste des fichiers, vous pouvez cliquer sur `Branch: master` et sélectionner `etape-3`.

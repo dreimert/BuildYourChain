@@ -2,8 +2,9 @@
 
 const argv = require('yargs') // Analyse des paramètres
   .command('get <key>', 'Récupère la valeur associé à la clé')
-  .command('set <key> <value>', 'Place une association clé / valeur')
+  .command('set <key> <value> [timestamp]', 'Place une association clé / valeur')
   .command('keys', 'Demande la liste des clés')
+  .command('KeysAndTime', 'Demande la liste des clés avec le temps')
   .command('addPeer <peerPort>', 'Ajoute un nouveau noeud voisin')
   .command('peers', 'Demande la liste des pairs du noeud')
   .command('version', 'Demande la version du CLI')
@@ -110,7 +111,11 @@ socket.on('connect', () => {
             console.info(`Commande get ${argv.key} =>`);
           }
           socket.emit('get', argv.key, (value) => {
-            console.info(value);
+            if (typeof value === 'object') {
+              console.info(value.value);
+            } else {
+              console.info(value);
+            }
             end();
           });
           break;
@@ -118,16 +123,33 @@ socket.on('connect', () => {
           if (!argv.bot) {
             console.info(`set ${argv.key} =>`);
           }
-          socket.emit('set', argv.key, argv.value, (ok) => {
-            console.info(ok);
-            end();
-          });
+
+          if (true) {
+            socket.emit('set', argv.key, argv.value, argv.timestamp, (ok) => {
+              console.info(ok);
+              end();
+            });
+          } else {
+            socket.emit('set', argv.key, argv.value, (ok) => {
+              console.info(ok);
+              end();
+            });
+          }
           break;
         case 'keys':
           if (!argv.bot) {
             console.info(`keys =>`);
           }
           socket.emit('keys', (keys) => {
+            console.info(keys.join(','));
+            end();
+          });
+          break;
+        case 'KeysAndTime':
+          if (!argv.bot) {
+            console.info(`KeysAndTime =>`);
+          }
+          socket.emit('KeysAndTime', (keys) => {
             console.info(keys.join(','));
             end();
           });
