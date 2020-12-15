@@ -1,201 +1,195 @@
-# Build Your Chain - Consensus
+# Build Your Chain - Consensus - Blockchain
 
 ## Objectif
 
-Le but de cette étape est de mettre en place un algorithme de consensus pour notre base de données.
+Les buts de cette étape sont :
+
+* Mettre en place un algorithme de consensus résistant aux utilisateurs malveillants pour notre base de données.
+* Introduire les notions de *blockchain*.
 
 ## Consensus
 
-À l'étape précédente, nous avons mis en place un système distribué minimal mais qui fonctionne plus ou moins bien car il n'a pas d'algorithme de consensus. Un algorithme de consensus est un algorithme qui va permettre aux noeuds de se mettre d'accord sur une valeur. Par exemple, si deux valeurs différentes sont proposées pour une même clé, l'algorithme doit permettre d'en choisir une.
+À l'étape précédente, nous avons mis en place un système distribué minimal qui résiste à différentes pannes grace à un algorithme de consensus minimaliste sur le choix de la valeur à conserver en cas de conflit. Mais notre algorithme ne résiste pas des attaques volontaires.
 
-Ces désaccords peuvent être dû à :
+Un algorithme de consensus est un algorithme qui va permettre aux noeuds de se mettre d'accord sur une valeur. Par exemple, si deux valeurs différentes sont proposées pour une même clé, l'algorithme doit permettre d'en choisir une. Il existe de nombreux algorithme de consensus, nous verrons ici un algorithme adapté aux *blockchains* et utilisant la preuve de travail.
 
-* des contraintes du monde physique comme la vitesse de la lumière. L'information ne peut pas se téléporter d'un serveur à l'autre, il y a un délai : la latence.
-* Il peut y avoir des dysfonctionnements : pannes de matériel ou corruptions de données.
-* Il y a des humains qui interagissent avec le système et l'infrastructure, ils peuvent être mal informés, incompétents ou malveillants.
+## Preuve de travail
 
-Il n'y a pas de d'algorithme de consensus ultime. Pour pouvoir mettre en place un algorithme de consensus, il faut mettre en place des contraintes qui auront un coup en temps ou en ressources.
+La preuve de travail, proof of work (PoW) en anglais, n'est pas un algorithme de consensus. C'est la preuve d'un travail réalisé. Elle est couteuse à produire mais facile à vérifier, c.-à-d., que l'utilisateur va devoir dépenser des ressources en temps et en énergie pour la produire mais il va être beaucoup plus simple de la vérifier. Elle est utilisée dans de nombreuses conditions. Par exemple, dans l'envoie de mail pour limiter les spams en augmentant le coût d'envoie d'un mail.
 
-## Outch ! Ça lag...
+Pour réaliser une preuve de travail, il faut savoir sur quoi on veut mettre une preuve. À l'étape précédente, ce qui nous pose problème c'est l'ajout d'une valeur, mettons une preuve dessus ! On veut donc mettre une preuve sur le couple key / valeur. Par exemple : `Enseignant / Damien Reimert`.
 
-La latence est partout dès qu'il y a communication. L'information ne peut pas aller plus vite que la lumière, sans compter les temps de traitement. Par exemple, à l'heure où j'écris ces lignes, pour l'échange d'un message de ping, il y a 229 millisecondes de latence entre Paris et Tokyo : https://wondernetwork.com/pings. Imaginez maintenant un système distribué de plusieurs milliers de noeuds, le temps que l'information se propage d'un bout à l'autre, il peut se passer plusieurs secondes. Et beaucoup plus si vous voulez transporter une grande qualité d'informations.
+On va ensuite utiliser une fonction de hachage sur cette valeur pour obtenir une empreinte et on va mettre une condition sur cette empreinte. La preuve va consister à trouver un *nombre magique* qui permet à l'empreinte de respecter la condition.
+Un des avantages est qu'il n'y a pas besoin de communiquer à l'avance avec l'interlocuteur pour lui fournir la preuve.
 
-Maintenant, imaginez : à quelques millisecondes d'écart, deux noeuds du réseau reçoivent pour la clé `Ville` une valeur différentes :
+Erf, je parle de *nombres magiques* !? Promis, je n'ai rien pris. Je vais vous expliquer deux ou trois trucs avant de continuer.
 
-* Noeud 1 : Ville / Paris
-* Noeud 2 : Ville / Tokyo
+### Le nombre magique
 
-L'information se propage de proche en proche jusqu'à confrontation. Un partie des noeuds a associé Ville à Paris et pour l'autre, Ville égale Tokyo.
+Je veux maintenant imposer une condition au hash, par exemple, il doit commencer par un zéro. Mais je suis incapable de connaitre le résultat de la fonction de hachage et dans l'exemple, le hash ne commence pas par zéro. Je fais comment ?
 
-#### Imaginez des solutions possibles. Notez-les, on pourra s'en servir plus tard.
-
-#### Lancez la commande `node scenarios/latence.js`.
-
-## Combattre le temps par le temps
-
-Dans l'idée initiale, on ne peut pas mettre à jour une valeur. Partant de cette idée, il semble cohérent que la valeur la plus vieille soit la bonne. Je vous propose donc l'algorithme de consensus suivant : on garde la valeur la plus vieille.
-
-On n'a pas l'âge d'une valeur pour le moment. Il va falloir la rajouter dans les données stockées mais aussi dans les données échangées pour pouvoir comparer. On ne stocke plus une simple valeur mais un ensemble de valeurs.
-
-```Javascript
-db[field] = {
-  value: value,
-  timestamp: Date.now(), // Retourne le timestamp de la date courante
-};
-```
-
-Pour commencer, il faut que la commande `set` accepte deux ou trois paramètres. Le troisième paramètre sera le timestamp. Je vous donne le code pour faire ça :
-
-```Javascript
-socket.on('set', function(field, value, timestamp, callback) {
-  // Dans le cas où il n'y a que deux paramètres, le callback est dans timestamp
-  if (typeof timestamp === 'function') {
-    // on réaffecte les valeurs aux bonnes variables
-    callback = timestamp;
-    timestamp = undefined;
-  }
-  // ...
-});
-```
-
-J'ai modifier le *CLI* pour qu'il supporte un troisième paramètre optionnel à la commande `set`. J'ai aussi modifier la commande `get` du *CLI* pour qu'elle puisse gérer des retours de type valeur unique ou d'un object contenant une valeur *value*.
-
-#### Modifiez la commande `set` dans `db.js` pour qu'elle supporte deux ou trois paramètres.
-
-#### Modifiez la commande `set` pour qu'elle stocke pour chaque clef la valeur et l'horodatage de celle-ci. Modifiez la manière dont la commande traite les clefs déjà définies pour garder la plus vielle.
-
-##### Indice : `timestamp = timestamp || Date.now()`. Si *timestamp* n'est pas défini, exécute la fonction *now*.
-
-Vous pouvez tester avec `node scenarios/latence.js`. Si votre implémentation est correcte, le réseau devrait converger vers une seule valeur.
-
-Cette solution fonctionne ; tant qu'il n'y a pas de dysfonctionnements ou d'utilisateurs malveillants.
-
-### Désynchronisation
-
-Si un noeud a un problème réseau et que des messages sont perdus, il ne sera jamais mis à jours, même s'il utilise la commande `keys`, celle-ci ne retourne pas l'horodatage de la valeur. Si il a une valeur, il la gardera.
-
-### Attaques
-
-#### Qu'est-ce qui empêche un individu mal intentionné de forger un message `set` avec un *vieux* horodatage ou si l'horloge de la machine est mal réglée ? Que va t'il se passer ?
-
-Cet algorithme fonctionne dans un monde parfait, sans panne et personnes malintentionnées. Essayons de faire plus résistant.
-
-## Résistance aux pannes
-
-Le problème d'une panne réseau est que le noeud ne reçoit pas la mise à jour de la valeur. Une solution est de vérifier régulièrement que l'on a bien la même chose que ses voisins.
-
-Vous pouvez voir une illustration en lançant la commande `node scenarios/panne.js`.
-
-Actuellement, la commande `keys` ne retourne que la liste des clés mais pas l'horodatage. Avec celle-ci, on ne peut pas savoir si une clé a changée. Le code suivant permet d'extraire uniquement le champs *timestamp* de chaque clé de la base de données.
-
-```Javascript
-const extractHorodatage = function(db) {
-  return Object.keys(db).reduce(function(result, key) {
-    result[key] = {
-      timestamp: db[key].timestamp
-    };
-    return result;
-  }, {});
-};
-// Si db = {a: {value: 'Dublin', timestamp: 123456789}}
-// retourne : {a: {timestamp: 123456789}}
-```
-
-#### Écrivez une commande `keysAndTime` qui retourne la liste des clés avec l'horodatage.
-
-Il ne reste plus qu'à appeler la commande la commande `keysAndTime` à la place de `keys` à la synchronisation pour détecter une désynchronisation et la corriger. Quand vous corrigez la valeur, informez vos voisins qui sont peut-être aussi désynchronisés.
-
-#### Mettez en place la mécanique de détection et de correction.
-
-##### Indice :
-
-```Javascript
-for (let key in object) {
-  if (object.hasOwnProperty(key)) {
-    console.log(object[key]);
-  }
-}
-// Si object vaut : {a: {timestamp: 123456789}}
-// Affiche : {timestamp: 123456789}
-```
-
-#### Notifiez les voisins du changement.
-
-#### Vérifier le bon fonctionnement en exécutant `node scenarios/panne.js`.
-
-## C'est toujours un problème de temps
-
-Dans la vie, je suis plutôt optimiste mais en informatique si ça peut mal se passer, ça se passera mal. Et puis, j'ai besoin de ce ressort scénaristique de fou pour vous amener là où je veux : La solution précédente fonctionne ? Vous êtes sûr ?
-
-#### Que se passe-t'il si pour un même timestamp, il y a deux valeurs différentes ?
-
-#### Lancez `node scenarios/horloge.js` et observez.
-
-Mais on n'a pas envie d'envoyer la valeur à chaque synchronisation. Imaginez si c'est un fichier de plusieurs centaines de Mo ! À la place, on va utiliser l'empreinte de la valeur qui est produite par une fonction de hachage.
-
-## Prenons un peu de *hash*
-
-Une fonction de hachage est une fonction qui prend en entrée un ensemble de données et retourne une empreinte, aussi appelée *hash*. L'empreinte respecte deux principes : Elle est unique pour un ensemble de données d'entrée, et une empreinte donnée ne permet pas de remonter à l'ensemble initial. On parle de non-collision et de non calculabilité de la pré-image. Cette empreinte est de taille fixe quelque-soit l'entrée. Une fonction couramment utilisé est SHA. Voici quelques exemples d'empreinte :
+C'est ici qu'intervient le *nombre magique*. On a vu qu'une petite modification entraine un changement important de l'empreinte. On va donc rajouter un nombre à la valeur sur laquelle on veut mettre notre preuve.
 
 ```Bash
-> echo "Blockchain" | shasum
-# efcf8baf5959ad1ebc7f4950425ef1c2eae9cbd9  -
-
-> echo "Block" | shasum
-# d1a6b1157e37bdaad78bec4c3240f0d6c576ad21  -
-
-> echo "Vous commencez à voir le principe ?" | shasum
-# 25abec7ced7642b886c1bffbc710cc3439f23ab7  -
+> echo "Enseignant / Damien Reimert / 0" | shasum
+# cf3ee12420c29fbf13aff6d3397561735284366d  -
 ```
 
-Une propriété intéressante est qu'une petite modification dans l'entrée change totalement l'empreinte :
+Il n'y a toujours pas de zéro au début mais nous allons pouvoir incrémenter ce nombre.
 
-```Bash
-> echo "Blockchain" | shasum
-# efcf8baf5959ad1ebc7f4950425ef1c2eae9cbd9  -
+#### Incrémenter le nombre jusqu'à obtenir une signature commençant par zero.
 
-> echo "blockchain" | shasum
-# ea5f179324c233b002fa8ac4201fa216001515e5  -
-```
+Vous venez de faire une preuve de travail et le nombre trouvé est le *nombre magique*.
 
-Les fonctions de hachage sont couramment utilisées pour vérifier que des données n'ont pas été corrompu lors d'un téléchargement par exemple. Le code suivant permet de produire une empreinte en Javascrip.
+## Implémentation
+
+Pour calculer une empreinte :
 
 ```Javascript
 const crypto = require('crypto');
 
-// Retourne l'empreinte de data.
-const getHash = function getHash(data) {
-  return crypto.createHash('sha256').update(data, 'utf8').digest('hex');
+const getHash = function getHash() {
+  const unMotDoux = "Votre mot doux";
+  return crypto.createHash('sha256').update(unMotDoux, 'utf8').digest('hex');
 }
 ```
 
-## Spoiler : cette fois, c'est la bonne ... avant l'étape suivante.
+Pour concaténer plusieurs valeurs :
 
-#### Ajoutez un champs `hash` dans votre base de données.
+```Javascript
+const toHash = `${key}${valeur}${magicNumber}`;
+```
 
-#### Modifiez `set` pour calculer l'empreinte de la valeur.
+Pour vérifier qu'une chaine commence par 3 zero :
 
-#### Modifiez `set` pour qu'en cas de timestamp identique mais hash différent, on retient le plus petit.
+```Javascript
+const valid = chaine.startsWith('0'.repeat(3));
+```
 
-#### Éditez la commande `keysAndTime` pour ajouter le hash.
+#### Modifiez le fichier `pow.js` pour qu'il calcule un *nombre magique* qui concaténé à une chaine de caractère donne un hash qui respecte la difficulté.
 
-#### Modifiez votre algorithme de synchronisation pour vérifier le hash et appliquer les modifications comme pour `set`.
+#### Lancez `node test-pow.js`.
 
-#### Lancez `node scenarios/horloge.js` et observez.
+Mais en faites, ça ne règle pas notre problème car la preuve de travail en elle-même n'est pas un algorithme de consensus. Nous avons juste ralenti l'écriture dans la base de données. Et si vous augmenter le nombre de zéro demandé en début de d'empreinte, vous pouvez encore plus ralentir cette écriture mais on y reviendra.
 
-Vous êtes maintenant résistant à la panne. Enfin, pas à l'instant T mais c'est déjà pas mal !
+Comme on l'a vu à l'étape précédente, on ne peut pas faire confiance à l'horodatage fournis par nos utilisateurs. Il faudrait une horloge globale au système. C'est le problème que l'on résout avec une chaine de blocks !
+
+## Blockchain
+
+Dans le monde réel, les machines tombent en panne, il y a des problèmes de latence réseau et des personnes malintentionnées mais je veux toujours faire une base de données sans tiers de confiance. Une des solutions est de mettre en place une *blockchain*.
+
+Une *blockchain* simple est une **base de données distribuée**, sur laquelle on ne peut faire que **deux opérations** : **lire** et **ajouter un block en fin de chaîne**. Ajouter un block demande une **preuve**. L'**algorithme de consensus** est le suivant : on garde la chaîne la plus longue.
+
+Ça vous dit quelque-chose ? Il ne nous manque que la notion de block et de chaîne.
+
+Un block est un ensemble d'informations. Dans notre cas, nous allons y mettre : Une clé, une valeur, le *nombre magique* mais que j'appellerai maintenant *nonce* ou bruit, l'empreinte du block que j'appellerai son *id*. C'est les mêmes informations que nous avons manipulés jusque là.
+
+Pour constituer une chaîne, il faut rajouter : l'id du block précédent. Et pour des raisons pratique, nous allons aussi mettre l'index du block dans la chaîne.
+
+Un block ressemble à ça :
+
+     Block
+    +-----------------------+
+    |                       |
+    | index: <index>        |
+    | id: <example: 42>     |
+    | previous: <idPrev>    |
+    | key: <votre clé>      |
+    | value: <votre valeur> |
+    | nonce: <magicNumber>  |
+    |                       |
+    +-----------------------+
+
+On va rajouter quelques contraintes sur l'empreinte :
+
+* On calcule l'empreinte sur l'index, l'id du block précédent, la clé, la valeur et le nonce.
+* L'empreinte doit commencer par trois zero.
+
+Et je vais pouvoir enchainer les blocks.
+
+    Block N                            Block N+1
+    +-----------------------+          +-----------------------+
+    |                       |          |                       |
+    | index: 23             |          | index: 24             |
+    | id: '06819d...'       |<--+      | id: '0ad5243...'      |
+    | previous: '000983...' |   +------| previous: '00019d...' |
+    | key: "Bonjour"        |          | key: 'Hello'          |
+    | value: "World"        |          | value: 'Monde'        |
+    | nonce: 8              |          | nonce: 6              |
+    |                       |          |                       |
+    +-----------------------+          +-----------------------+
+
+Le premier block est particulier, il n'a pas de prédécesseur. On l'appelle le *block genesis*. Il doit être le même pour tous sinon il sera impossible de construire une blockchain commune.
+
+## Implémentation
+
+Histoire de ne pas tout mélanger, mettons de coté le code réalisé jusque là. Vous avez tous les outils pour réaliser l'implémentation d'un block. Pour vous aider, j'ai commencé l'implémentation d'un block dans le fichier `Block.js`. J'ai aussi ajouter un fichier `test-block.js`.
+
+#### Modifiez le fichier `Block.js` pour finir l'implémentation de la classe `Block`.
+
+##### Indice. Pour accéder au aux attributs d'une intense de classe depuis une méthode :
+
+```Javascript
+class MaClass {
+
+  constructor() {
+    this.monAttribut = "maValeur";
+  }
+
+  // Retourne l'identifiant du block en le calculant depuis les données
+  maMethode() {
+    const texte = `La valeur de 'monAttribut' est ${this.monAttribut}`;
+    return texte;
+  }
+}
+```
+
+##### Indice : Pour que les tests passent, il faut respecter l'ordre indiqué plus haut pour les éléments à hasher.
+
+## Synchronisation
+
+Maintenant que l'on a une mécanique de classe `Block` fonctionnelle, utilisons la dans notre noeud.
+
+#### Ajoutez à votre node un tableau `blockchain` qui stockera les blocks.
+
+Il n'y a pas de raisons que nous noeuds se synchronise à l'aide de la commande `keys`.
+
+#### Ajoutez la commande `last` qui renvoie le dernier block de la chaîne et une commande `block` avec un paramètre index qui renvoie le block à l'index demandé.
+
+#### Modifiez la commande `set` pour qu'elle ajoute des blocks dans `blockchain`. Dans `db`, stockez maintenant le block correspondant à la clef.
+
+#### Modifiez la fonction de synchronisation pour qu'elle utilise `last` et demande les blocks manquants.
+
+Vous avez maintenant une chaîne de blocks. On ne peut plus modifier les enregistrements passées mais on n'a toujours pas d'algorithme de consensus.
+
+## Consensus
+
+Il faut maintenant vérifier l'intégrité de la blockchain.
+
+#### Ecrivez une fonction qui parcourt la blockchain et vérifie que chaque block est valide et que sa variable `previous` est bien égale à l'id de l'élément précédent.
+
+#### Quand vous synchronisez avec un autre noeud, si sa blockchain est plus longue, télécharger la. Vérifiez son intégrité et mettez à jour votre base de données.
+
+Le code suivant reconstruit la base de données depuis la blockchain.
+
+```Javascript
+const newDb = blockchain.reduce((db, block) => {
+  db[block.key] = block.value;
+  return db;
+}, {});
+```
+
+#### Si certains de vos blocks sont supprimés dans l'opération, reconstruisez votre base de données.
 
 ## Conclusion
 
-Nous avons mis en place un algorithme de consensus qui résiste aux problèmes de latence et de pannes réseaux. Pour résister, nous avons ajouter des données et mis en place des échanges d'informations supplémentaires, ce qui représente un coût.
-
-Nous n'avons pas traité le troisième cas de désaccords dù à un utilisateur potentiellement malveillants. Nous traiteront se problème à l'étape suivante.
+Vous avez maintenant une blockchain minimale !
 
 ## Suite
 
-Aller à l'étape 3 : `git checkout etape-3`.
+Aller à l'étape 4 : `git checkout etape-4`.
 
 Pour continuer à lire le sujet :
 
 * soit vous lisez le fichier `README.md` sur votre machine.
-* soit sur GitHub, au-dessus de la liste des fichiers, vous pouvez cliquer sur `Branch: master` et sélectionner `etape-3`.
+* soit sur GitHub, au-dessus de la liste des fichiers, vous pouvez cliquer sur `Branch: master` et sélectionner `etape-4`.
