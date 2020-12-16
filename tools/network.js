@@ -47,7 +47,7 @@ module.exports.run = function run(id, port, verbose = true) {
   }
 
   network[id] = {
-    process: spawn("./db.js", [`--port=${port}`], {
+    process: spawn("node", [`db.js`, `--port=${port}`], {
       stdio: [ 'ignore', out, err ],
     }),
     port,

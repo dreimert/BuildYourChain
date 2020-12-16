@@ -9,17 +9,17 @@ networkTools.runNetwork(networkTools.parseTopology("a-b b-c c-d d-e e-f f-g g-h 
   console.info("Attribution de la valeur Paris pour a et Tokio pour z.")
   return Promise.all([
     // Initialisation de a avec Paris
-    cliTools.execCommande(`./cli.js --port=${networkTools.network['a'].port} --bot=true set Ville Paris`)
+    cliTools.execCommande(`node ./cli.js --port=${networkTools.network['a'].port} --bot=true set Ville Paris`)
   ,
     // Initialisation de z avec Tokio
-    cliTools.execCommande(`./cli.js --port=${networkTools.network['z'].port} --bot=true set Ville Tokio`)
+    cliTools.execCommande(`node ./cli.js --port=${networkTools.network['z'].port} --bot=true set Ville Tokio`)
   ]);
 }).then(
   networkTools.wait(5000) // On attend 5 secondes. C'est complémentement arbitraire.
 ).then(() => {
   console.info('Recherche des valeurs de chaque noeuds');
   return Promise.all("abcdefghijklmnopqrstuvwxyz".split('').map((node) => {
-    return cliTools.execCommande(`./cli.js --port=${networkTools.network[node].port} --bot=true get Ville`).then((v) => {
+    return cliTools.execCommande(`node cli.js --port=${networkTools.network[node].port} --bot=true get Ville`).then((v) => {
       return `${node} => ${v.substring(0, 5)}`;
     });
   })).then((liste) => {
