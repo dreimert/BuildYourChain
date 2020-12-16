@@ -124,7 +124,7 @@ socket.on('connect', () => {
             console.info(`set ${argv.key} =>`);
           }
 
-          if (true) {
+          if (argv.timestamp) {
             socket.emit('set', argv.key, argv.value, argv.timestamp, (ok) => {
               console.info(ok);
               end();
