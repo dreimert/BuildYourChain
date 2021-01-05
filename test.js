@@ -20,6 +20,13 @@ function execCommande(cmd, t) {
   });
 }
 
+tape('Vérification de la version de node', function (t) {
+  execCommande("node --version", t).then((stdout) => {
+    t.ok(parseInt(stdout.split('.')[0].split('v')[1]) >= 12, "Votre version de node est trop vieille et risque de provoquer des bugs !");
+    t.end();
+  });
+});
+
 tape('Vérification de la version', function (t) {
   execCommande("./db.js --version", t).then((stdout) => {
     t.equal(stdout, '1.0.0\n', "Numero de version");
