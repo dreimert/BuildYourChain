@@ -28,7 +28,7 @@ tape('Vérification de la version de node', function (t) {
 });
 
 tape('Vérification de la version', function (t) {
-  execCommande("./db.js --version", t).then((stdout) => {
+  execCommande("node ./db.js --version", t).then((stdout) => {
     t.equal(stdout, '1.0.0\n', "Numero de version");
     t.end();
   });
@@ -55,7 +55,7 @@ tape('Démarrage du serveur sur le port 3000', function (t) {
     const out = fs.openSync('./serveur.log', 'a');
     const err = fs.openSync('./serveur.err', 'a');
 
-    serveur = spawn("./db.js", ["--port=3000"], {
+    serveur = spawn("node", ["./db.js", "--port=3000"], {
       stdio: [ 'ignore', out, err ],
     });
 
@@ -64,77 +64,77 @@ tape('Démarrage du serveur sur le port 3000', function (t) {
 });
 
 tape('Affectation de la valeur "Reimert" à la clef "name"', function (t) {
-  execCommande("./cli.js --port=3000 --bot=true set name Reimert", t).then((stdout) => {
+  execCommande("node ./cli.js --port=3000 --bot=true set name Reimert", t).then((stdout) => {
     t.equal(stdout, 'true\n', "Set réussi");
     t.end();
   });
 });
 
 tape('Récupération de la valeur associé à la clef "name"', function (t) {
-  execCommande("./cli.js --port=3000 --bot=true get name", t).then((stdout) => {
+  execCommande("node ./cli.js --port=3000 --bot=true get name", t).then((stdout) => {
     t.equal(stdout, 'Reimert\n', "Valeur correct");
     t.end();
   });
 });
 
 tape('Récupération de la valeur associé à la clef "jeNeSuisPasDef"', function (t) {
-  execCommande("./cli.js --port=3000 --bot=true get jeNeSuisPasDef", t).then((stdout) => {
+  execCommande("node ./cli.js --port=3000 --bot=true get jeNeSuisPasDef", t).then((stdout) => {
     t.equal(stdout, 'null\n', "Retour null");
     t.end();
   });
 });
 
 tape('Affectation de la valeur "Frenot" à la clef "name"', function (t) {
-  execCommande("./cli.js --port=3000 --bot=true set name Frenot", t).then((stdout) => {
+  execCommande("node ./cli.js --port=3000 --bot=true set name Frenot", t).then((stdout) => {
     t.equal(stdout, 'false\n', "Set doit échouer car la valeur change");
     t.end();
   });
 });
 
 tape('Récupération de la valeur associé à la clef "name"', function (t) {
-  execCommande("./cli.js --port=3000 --bot=true get name", t).then((stdout) => {
+  execCommande("node ./cli.js --port=3000 --bot=true get name", t).then((stdout) => {
     t.equal(stdout, 'Reimert\n', "Valeur correct");
     t.end();
   });
 });
 
 tape('Réaffectation de la valeur "Reimert" à la clef "name"', function (t) {
-  execCommande("./cli.js --port=3000 --bot=true set name Reimert", t).then((stdout) => {
+  execCommande("node ./cli.js --port=3000 --bot=true set name Reimert", t).then((stdout) => {
     t.equal(stdout, 'true\n', "Set doit réussir car la valeur ne change pas. Cf. protocole.");
     t.end();
   });
 });
 
 tape('Récupération de la valeur associé à la clef "name"', function (t) {
-  execCommande("./cli.js --port=3000 --bot=true get name", t).then((stdout) => {
+  execCommande("node ./cli.js --port=3000 --bot=true get name", t).then((stdout) => {
     t.equal(stdout, 'Reimert\n', "Valeur correct");
     t.end();
   });
 });
 
 tape('Récupération de la list des clefs', function (t) {
-  execCommande("./cli.js --port=3000 --bot=true keys", t).then((stdout) => {
+  execCommande("node ./cli.js --port=3000 --bot=true keys", t).then((stdout) => {
     t.equal(stdout, 'name\n', "Valeur correct");
     t.end();
   });
 });
 
 tape('Affectation de la valeur "Frenot" à la clef "directeur"', function (t) {
-  execCommande("./cli.js --port=3000 --bot=true set directeur Frenot", t).then((stdout) => {
+  execCommande("node ./cli.js --port=3000 --bot=true set directeur Frenot", t).then((stdout) => {
     t.equal(stdout, 'true\n', "Set doit réussir");
     t.end();
   });
 });
 
 tape('Récupération de la valeur associé à la clef "directeur"', function (t) {
-  execCommande("./cli.js --port=3000 --bot=true get directeur", t).then((stdout) => {
+  execCommande("node ./cli.js --port=3000 --bot=true get directeur", t).then((stdout) => {
     t.equal(stdout, 'Frenot\n', "Valeur correct");
     t.end();
   });
 });
 
 tape('Récupération de la list des clefs', function (t) {
-  execCommande("./cli.js --port=3000 --bot=true keys", t).then((stdout) => {
+  execCommande("node ./cli.js --port=3000 --bot=true keys", t).then((stdout) => {
     t.equal(stdout, 'name,directeur\n', "Valeur correct");
     t.end();
   });
