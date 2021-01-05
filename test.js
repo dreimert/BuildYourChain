@@ -23,6 +23,10 @@ function execCommande(cmd, t) {
   });
 }
 
+function splitAndSort(peers) {
+  return peers.replace('\n', '').split(',').sort();
+}
+
 test('Vérification de la version', function (t) {
   return execCommande("node ./db.js --version", t).then((stdout) => {
     t.equal(stdout, '1.0.0\n', "Numero de version");
@@ -35,19 +39,19 @@ test('Démarrage de trois serveurs a, b et c', function (t) {
 
 test('Vérification des voisins de a', function (t) {
   return execCommande("node ./cli.js --port=7000 --bot=true peers", t).then((stdout) => {
-    t.equal(stdout, '7001,7002\n', "deux voisins sur les ports 7001 et 7002");
+    t.deepEqual(splitAndSort(stdout), splitAndSort('7001,7002\n'), "deux voisins sur les ports 7001 et 7002");
   });
 });
 
 test('Vérification des voisins de b', function (t) {
   return execCommande("node ./cli.js --port=7001 --bot=true peers", t).then((stdout) => {
-    t.equal(stdout, '7002,7000\n', "deux voisins sur les ports 7000 et 7002");
+    t.deepEqual(splitAndSort(stdout), splitAndSort('7002,7000\n'), "deux voisins sur les ports 7000 et 7002");
   });
 });
 
 test('Vérification des voisins de c', function (t) {
   return execCommande("node ./cli.js --port=7002 --bot=true peers", t).then((stdout) => {
-    t.equal(stdout, '7000,7001\n', "deux voisins sur les ports 7000 et 7001");
+    t.deepEqual(splitAndSort(stdout), splitAndSort('7000,7001\n'), "deux voisins sur les ports 7000 et 7001");
   });
 });
 
@@ -109,25 +113,25 @@ test('Vérification de l\'initialisation', function (t) {
 
 test('Vérification des voisins de a', function (t) {
   return execCommande("node ./cli.js --port=7000 --bot=true peers", t).then((stdout) => {
-    t.equal(stdout, '7001,7002,7003\n', "trois voisins sur les ports 7001, 7002 et 7003");
+    t.deepEqual(splitAndSort(stdout), splitAndSort('7001,7002,7003\n'), "trois voisins sur les ports 7001, 7002 et 7003");
   });
 });
 
 test('Vérification des voisins de b', function (t) {
   return execCommande("node ./cli.js --port=7001 --bot=true peers", t).then((stdout) => {
-    t.equal(stdout, '7002,7000\n', "deux voisins sur les ports 7000 et 7002");
+    t.deepEqual(splitAndSort(stdout), splitAndSort('7002,7000\n'), "deux voisins sur les ports 7000 et 7002");
   });
 });
 
 test('Vérification des voisins de c', function (t) {
   return execCommande("node ./cli.js --port=7002 --bot=true peers", t).then((stdout) => {
-    t.equal(stdout, '7000,7001\n', "deux voisins sur les ports 7000 et 7001");
+    t.deepEqual(splitAndSort(stdout), splitAndSort('7000,7001\n'), "deux voisins sur les ports 7000 et 7001");
   });
 });
 
 test('Vérification des voisins de c', function (t) {
   return execCommande("node ./cli.js --port=7003 --bot=true peers", t).then((stdout) => {
-    t.equal(stdout, '7000\n', "un voisin sur le port 7000");
+    t.deepEqual(splitAndSort(stdout), splitAndSort('7000\n'), "un voisin sur le port 7000");
   });
 });
 

@@ -19,9 +19,12 @@ const promiseTimeout = function(ms, promise){
   ])
 }
 
-function wait(ms) {
+module.exports.wait = function wait(ms, verbose = true) {
   return () => {
     return new Promise((resolve) => {
+      if (verbose) {
+        console.info(`On attend ${ms} ms`);
+      }
       setTimeout(resolve, ms);
     });
   }
@@ -44,14 +47,23 @@ module.exports.run = function run(id, port, verbose = true) {
   }
 
   network[id] = {
-    process: spawn("node", ["./db.js", `--port=${port}`], {
+    process: spawn("node", [`db.js`, `--port=${port}`], {
       stdio: [ 'ignore', out, err ],
     }),
     port,
     id,
   };
 
-  return wait(1000)();
+  const onError = new Promise((resolve, reject) => {
+    network[id].process.on('exit', (err) => {
+      reject(`Le noeud ${id} vient de s'arrêter avec le code ${err}`)
+    })
+  });
+
+  return Promise.race([
+    onError,
+    module.exports.wait(1000, false)()
+  ]);
 };
 
 module.exports.parseTopology = function parseTopology(topology) {
@@ -81,7 +93,7 @@ module.exports.runNetwork = function runNetwork(topology, port = 7000, verbose =
     return Promise.all(topology.map((connexion) => {
       return module.exports.setNeighbor(network[connexion[0]], network[connexion[1]], verbose, timeout);
     }))
-  }).then(wait(1000)).then(network);
+  }).then(module.exports.wait(1000, verbose)).then(network);
 };
 
 module.exports.setNeighbor = function setNeighbor(src, dst, verbose = true, timeout = 5000) {
