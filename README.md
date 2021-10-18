@@ -156,9 +156,13 @@ Il n'y a pas de raisons que nous noeuds se synchronise à l'aide de la commande 
 
 #### Ajoutez la commande `last` qui renvoie le dernier block de la chaîne et une commande `block` avec un paramètre index qui renvoie le block à l'index demandé.
 
-#### Modifiez la commande `set` pour qu'elle ajoute des blocks dans `blockchain`. Dans `db`, stockez maintenant le block correspondant à la clef.
+#### Modifiez la commande `set` pour qu'elle produise un block quand on lui passe un couple clé / valeur et qu'elle calcule la preuve. Elle doit ensuite ajouter le block dans `blockchain`. Dans `db`, stockez maintenant le block correspondant à la clef.
+
+#### Ajoutez la commande `setBlock`. Elle doit vérifier le block, l'ajouter dans `blockchain` et mettre à jour `db`.
 
 #### Modifiez la fonction de synchronisation pour qu'elle utilise `last` et demande les blocks manquants.
+
+Ne vous occupez pas de la cohérence entre les blocks pour le moment, seulement si la `key` du block est dans la db.
 
 Vous avez maintenant une chaîne de blocks. On ne peut plus modifier les enregistrements passées mais on n'a toujours pas d'algorithme de consensus.
 
@@ -166,11 +170,17 @@ Vous avez maintenant une chaîne de blocks. On ne peut plus modifier les enregis
 
 Il faut maintenant vérifier l'intégrité de la blockchain.
 
-#### Ecrivez une fonction qui parcourt la blockchain et vérifie que chaque block est valide et que sa variable `previous` est bien égale à l'id de l'élément précédent.
+#### Quand vous recevez un block, vérifiez que son index est plus grand ou égal à la longueur de votre blockchain avant de l'accepter.
 
-#### Quand vous synchronisez avec un autre noeud, si sa blockchain est plus longue, télécharger la. Vérifiez son intégrité et mettez à jour votre base de données.
+#### Regardez si vous connaissez le block précédent `previous` de ce block. Si c'est la cas, vérifier la cohérence d'index et ajoutez le block à la chaine. Sinon, demander l'ensemble des blocks qui permettent de raccrocher votre chaine.
 
-Le code suivant reconstruit la base de données depuis la blockchain.
+#### Vérifiez que la chaine est cohérente. Si oui, mettez à jour votre chaine.
+
+#### Faite la même chose quand vous synchronisez avec un autre noeud.
+
+#### Si certains de vos blocks sont supprimés dans l'opération, reconstruisez votre base de données.
+
+Indice :
 
 ```Javascript
 const newDb = blockchain.reduce((db, block) => {
@@ -178,8 +188,6 @@ const newDb = blockchain.reduce((db, block) => {
   return db;
 }, {});
 ```
-
-#### Si certains de vos blocks sont supprimés dans l'opération, reconstruisez votre base de données.
 
 ## Conclusion
 
