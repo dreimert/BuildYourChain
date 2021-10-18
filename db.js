@@ -20,6 +20,7 @@ if (argv.version) {
 }
 
 const ioClient = require('socket.io-client')
+const crypto = require('crypto')
 
 // Création de la DB
 const db = Object.create(null)
@@ -31,10 +32,10 @@ function getKeysAndSetUnknow (socket) {
     console.info('addPeer::keys to', socket.id, '->', keys)
     for (const key in keys) {
       if (keys.hasOwnProperty(key)) {
-        if (!db[key] || db[key].timestamp > keys[key].timestamp) {
+        if (!db[key] || db[key].timestamp > keys[key].timestamp || (db[key].timestamp === keys[key].timestamp && db[key].hash > keys[key].hash)) {
           socket.emit('get', key, (value) => {
             console.info('addPeer::get', key, ' to', socket.id, '->', value)
-            updateField(key, value.value, value.timestamp)
+            updateField(key, value.value, value.timestamp, value.hash)
           })
         }
       }
@@ -42,10 +43,11 @@ function getKeysAndSetUnknow (socket) {
   })
 }
 
-function updateField (field, value, timestamp) {
+function updateField (field, value, timestamp, hash) {
   db[field] = {
     value: value,
-    timestamp: timestamp
+    timestamp: timestamp,
+    hash: hash
   }
 
   sockets.forEach((socket, index) => {
@@ -58,7 +60,8 @@ function updateField (field, value, timestamp) {
 const extractHorodatage = function (db) {
   return Object.keys(db).reduce(function (result, key) {
     result[key] = {
-      timestamp: db[key].timestamp
+      timestamp: db[key].timestamp,
+      hash: db[key].hash
     }
     return result
   }, {})
@@ -79,15 +82,24 @@ function initSocket (socket) {
       timestamp = Date.now()
     }
 
+    const hash = crypto.createHash('sha256').update(value, 'utf8').digest('hex')
+
     if (field in db) { // Si la clef est dans la base de donnée
       if (db[field].timestamp > timestamp) {
-        updateField(field, value, timestamp)
+        updateField(field, value, timestamp, hash)
         callback(true)
       } else if (db[field].timestamp < timestamp) {
         console.info(`set error for field ${field} : the timestamp is too recent.`)
         callback(false)
-      } else if (db[field].timestamp === timestamp && db[field].value === value) {
-        callback(true)
+      } else if (db[field].timestamp === timestamp) {
+        if (db[field].value === value) {
+          callback(true)
+        } else if (db[field].hash <= hash) {
+          callback(false)
+        } else {
+          updateField(field, value, timestamp, hash)
+          callback(true)
+        }
       } else {
         console.info(`set error : Field ${field} exists.`)
         callback(false)
@@ -95,7 +107,7 @@ function initSocket (socket) {
     } else {
       console.info(`set ${field} : ${value}`)
 
-      updateField(field, value, timestamp)
+      updateField(field, value, timestamp, hash)
 
       callback(true)
     }
