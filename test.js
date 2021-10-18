@@ -1,8 +1,11 @@
 const tape = require('tape');
-const net = require('net');
+const _test = require('tape-promise').default
+const test = _test(tape) // decorate tape
 const fs = require('fs');
 
-const { exec, spawn } = require("child_process");
+const networkTools = require('./tools/network');
+
+const { exec } = require("child_process");
 
 function execCommande(cmd, t) {
   return new Promise((resolve, reject) => {
@@ -20,127 +23,119 @@ function execCommande(cmd, t) {
   });
 }
 
-tape('Vérification de la version de node', function (t) {
-  execCommande("node --version", t).then((stdout) => {
-    t.ok(parseInt(stdout.split('.')[0].split('v')[1]) >= 12, "Votre version de node est trop vieille et risque de provoquer des bugs !");
-    t.end();
-  });
-});
-
-tape('Vérification de la version', function (t) {
-  execCommande("node ./db.js --version", t).then((stdout) => {
-    t.equal(stdout, '1.0.0\n', "Numero de version");
-    t.end();
-  });
-});
-
-function isPortTaken(port) {
-  return new Promise((resolve, reject) => {
-    const tester = net.createServer()
-       .once('error', err => (err.code == 'EADDRINUSE' ? resolve(false) : reject(err)))
-       .once('listening', () => tester.once('close', () => resolve(true)).close())
-       .listen(port)
-  });
+function splitAndSort(peers) {
+  return peers.replace('\n', '').split(',').sort();
 }
 
-let serveur;
+test('Vérification de la version', function (t) {
+  return execCommande("node ./db.js --version", t).then((stdout) => {
+    t.equal(stdout, '1.0.0\n', "Numero de version");
+  });
+});
 
-tape('Démarrage du serveur sur le port 3000', function (t) {
-  isPortTaken(3000).then((ok) =>{
-    t.ok(ok, "Port disponible");
-    if (!ok) {
-      t.comment("Avez-vous bien arrêté tous les serveurs en cours d'exécution ?");
-    }
-  }).then(() => {
-    const out = fs.openSync('./serveur.log', 'a');
-    const err = fs.openSync('./serveur.err', 'a');
+test('Démarrage de trois serveurs a, b et c', function (t) {
+  return networkTools.runNetwork(networkTools.parseTopology("a-b b-c a-c"), 7000, false);
+});
 
-    serveur = spawn("node", ["./db.js", "--port=3000"], {
-      stdio: [ 'ignore', out, err ],
+test('Vérification des voisins de a', function (t) {
+  return execCommande("node ./cli.js --port=7000 --bot=true peers", t).then((stdout) => {
+    t.deepEqual(splitAndSort(stdout), splitAndSort('7001,7002\n'), "deux voisins sur les ports 7001 et 7002");
+  });
+});
+
+test('Vérification des voisins de b', function (t) {
+  return execCommande("node ./cli.js --port=7001 --bot=true peers", t).then((stdout) => {
+    t.deepEqual(splitAndSort(stdout), splitAndSort('7002,7000\n'), "deux voisins sur les ports 7000 et 7002");
+  });
+});
+
+test('Vérification des voisins de c', function (t) {
+  return execCommande("node ./cli.js --port=7002 --bot=true peers", t).then((stdout) => {
+    t.deepEqual(splitAndSort(stdout), splitAndSort('7000,7001\n'), "deux voisins sur les ports 7000 et 7001");
+  });
+});
+
+test('Réajout à c de b', function (t) {
+  return execCommande("node ./cli.js --port=7002 --bot=true addPeer 7001", t).then((stdout) => {
+    t.equal(stdout, 'false\n', "Doit refuser");
+  });
+});
+
+test('Vérification de la propagation de valeur', function (t) {
+  return execCommande("node ./cli.js --port=7000 --bot=true set casque quest2", t).then((stdout) => {
+    t.equal(stdout, 'true\n', "Set doit réussir");
+  }).then(() =>{
+    return execCommande("node ./cli.js --port=7000 --bot=true get casque", t).then((stdout) => {
+      t.equal(stdout, 'quest2\n', "La valeur doit correct sur a");
     });
-
-    t.end();
+  }).then(() =>{
+    return execCommande("node ./cli.js --port=7001 --bot=true get casque", t).then((stdout) => {
+      t.equal(stdout, 'quest2\n', "La valeur doit correct sur b");
+    });
+  }).then(() =>{
+    return execCommande("node ./cli.js --port=7002 --bot=true get casque", t).then((stdout) => {
+      t.equal(stdout, 'quest2\n', "La valeur doit correct sur c");
+    });
   })
 });
 
-tape('Affectation de la valeur "Reimert" à la clef "name"', function (t) {
-  execCommande("node ./cli.js --port=3000 --bot=true set name Reimert", t).then((stdout) => {
-    t.equal(stdout, 'true\n', "Set réussi");
-    t.end();
-  });
-});
-
-tape('Récupération de la valeur associé à la clef "name"', function (t) {
-  execCommande("node ./cli.js --port=3000 --bot=true get name", t).then((stdout) => {
-    t.equal(stdout, 'Reimert\n', "Valeur correct");
-    t.end();
-  });
-});
-
-tape('Récupération de la valeur associé à la clef "jeNeSuisPasDef"', function (t) {
-  execCommande("node ./cli.js --port=3000 --bot=true get jeNeSuisPasDef", t).then((stdout) => {
-    t.equal(stdout, 'null\n', "Retour null");
-    t.end();
-  });
-});
-
-tape('Affectation de la valeur "Frenot" à la clef "name"', function (t) {
-  execCommande("node ./cli.js --port=3000 --bot=true set name Frenot", t).then((stdout) => {
-    t.equal(stdout, 'false\n', "Set doit échouer car la valeur change");
-    t.end();
-  });
-});
-
-tape('Récupération de la valeur associé à la clef "name"', function (t) {
-  execCommande("node ./cli.js --port=3000 --bot=true get name", t).then((stdout) => {
-    t.equal(stdout, 'Reimert\n', "Valeur correct");
-    t.end();
-  });
-});
-
-tape('Réaffectation de la valeur "Reimert" à la clef "name"', function (t) {
-  execCommande("node ./cli.js --port=3000 --bot=true set name Reimert", t).then((stdout) => {
-    t.equal(stdout, 'true\n', "Set doit réussir car la valeur ne change pas. Cf. protocole.");
-    t.end();
-  });
-});
-
-tape('Récupération de la valeur associé à la clef "name"', function (t) {
-  execCommande("node ./cli.js --port=3000 --bot=true get name", t).then((stdout) => {
-    t.equal(stdout, 'Reimert\n', "Valeur correct");
-    t.end();
-  });
-});
-
-tape('Récupération de la list des clefs', function (t) {
-  execCommande("node ./cli.js --port=3000 --bot=true keys", t).then((stdout) => {
-    t.equal(stdout, 'name\n', "Valeur correct");
-    t.end();
-  });
-});
-
-tape('Affectation de la valeur "Frenot" à la clef "directeur"', function (t) {
-  execCommande("node ./cli.js --port=3000 --bot=true set directeur Frenot", t).then((stdout) => {
+test('Vérification de la propagation d\'une seconde valeur', function (t) {
+  return execCommande("node ./cli.js --port=7000 --bot=true set jeu beatsaber", t).then((stdout) => {
     t.equal(stdout, 'true\n', "Set doit réussir");
-    t.end();
+  }).then(() =>{
+    return execCommande("node ./cli.js --port=7000 --bot=true get jeu", t).then((stdout) => {
+      t.equal(stdout, 'beatsaber\n', "La valeur doit correct sur a");
+    });
+  }).then(() =>{
+    return execCommande("node ./cli.js --port=7001 --bot=true get jeu", t).then((stdout) => {
+      t.equal(stdout, 'beatsaber\n', "La valeur doit correct sur b");
+    });
+  }).then(() =>{
+    return execCommande("node ./cli.js --port=7002 --bot=true get jeu", t).then((stdout) => {
+      t.equal(stdout, 'beatsaber\n', "La valeur doit correct sur c");
+    });
+  })
+});
+
+test('Démarrage d\'un quatrième serveur d connecté à a', function (t) {
+  return networkTools.runNetwork(networkTools.parseTopology("a-d"), 7003, false)
+});
+
+test('Vérification de l\'initialisation', function (t) {
+  return execCommande("node ./cli.js --port=7003 --bot=true get casque", t).then((stdout) => {
+    t.equal(stdout, 'quest2\n', "La valeur doit correct sur d");
+  }).then(() =>{
+    return execCommande("node ./cli.js --port=7003 --bot=true get jeu", t).then((stdout) => {
+      t.equal(stdout, 'beatsaber\n', "La valeur doit correct sur d");
+    });
   });
 });
 
-tape('Récupération de la valeur associé à la clef "directeur"', function (t) {
-  execCommande("node ./cli.js --port=3000 --bot=true get directeur", t).then((stdout) => {
-    t.equal(stdout, 'Frenot\n', "Valeur correct");
-    t.end();
+test('Vérification des voisins de a', function (t) {
+  return execCommande("node ./cli.js --port=7000 --bot=true peers", t).then((stdout) => {
+    t.deepEqual(splitAndSort(stdout), splitAndSort('7001,7002,7003\n'), "trois voisins sur les ports 7001, 7002 et 7003");
   });
 });
 
-tape('Récupération de la list des clefs', function (t) {
-  execCommande("node ./cli.js --port=3000 --bot=true keys", t).then((stdout) => {
-    t.equal(stdout, 'name,directeur\n', "Valeur correct");
-    t.end();
+test('Vérification des voisins de b', function (t) {
+  return execCommande("node ./cli.js --port=7001 --bot=true peers", t).then((stdout) => {
+    t.deepEqual(splitAndSort(stdout), splitAndSort('7002,7000\n'), "deux voisins sur les ports 7000 et 7002");
   });
 });
 
-tape('Kill serveur', function (t) {
-  t.ok(serveur.kill(), "Arret du serveur");
-  t.end();
+test('Vérification des voisins de c', function (t) {
+  return execCommande("node ./cli.js --port=7002 --bot=true peers", t).then((stdout) => {
+    t.deepEqual(splitAndSort(stdout), splitAndSort('7000,7001\n'), "deux voisins sur les ports 7000 et 7001");
+  });
+});
+
+test('Vérification des voisins de c', function (t) {
+  return execCommande("node ./cli.js --port=7003 --bot=true peers", t).then((stdout) => {
+    t.deepEqual(splitAndSort(stdout), splitAndSort('7000\n'), "un voisin sur le port 7000");
+  });
+});
+
+test('Kill serveurs', function (t) {
+  t.deepEqual(networkTools.killall(), [true, true, true, true], "Arret des serveurs");
+  return Promise.resolve();
 });
