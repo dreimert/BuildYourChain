@@ -19,6 +19,27 @@ if (argv.version) {
   process.exit(0) // met fin au programme
 }
 
+const ioClient = require('socket.io-client')
+
+// Création de la DB
+const db = Object.create(null)
+const neighbors = []
+const sockets = []
+
+function getKeysAndSetUnknow (socket) {
+  socket.emit('keys', (keys) => {
+    console.info('addPeer::keys to', socket.id, '->', keys)
+    keys.forEach((key, i) => {
+      if (!db[key]) {
+        socket.emit('get', key, (value) => {
+          console.info('addPeer::get', key, ' to', socket.id, '->', value)
+          db[key] = value
+        })
+      }
+    })
+  })
+}
+
 // Initialisation d'une socket
 function initSocket (socket) {
   socket.on('get', function (field, callback) {
@@ -36,14 +57,68 @@ function initSocket (socket) {
       }
     } else {
       console.info(`set ${field} : ${value}`)
+
       db[field] = value
+
+      sockets.forEach((socket, index) => {
+        socket.emit('set', field, value, (ok) => {
+          console.info('set to', socket.id, '->', ok)
+        })
+      })
+
       callback(true)
     }
   })
 
   socket.on('keys', function (callback) {
-    console.info(`keys`)
+    console.info('keys')
     callback(Object.keys(db)) // Object.keys() extrait la liste des clefs d'un object et les renvoie sous forme d'un tableau.
+  })
+
+  socket.on('peers', function (callback) {
+    console.info('peers')
+    callback(neighbors)
+  })
+
+  socket.on('addPeer', function (port, callback) {
+    console.info('addPeer', port)
+    if (neighbors.includes(port)) {
+      callback(false)
+    } else {
+      neighbors.push(port)
+
+      const neighborSocket = ioClient(`http://localhost:${port}`, {
+        path: '/byc'
+      })
+
+      neighborSocket.on('connect', () => {
+        console.info('addPeer::connect to', port, neighborSocket.id)
+
+        initSocket(neighborSocket)
+        sockets.push(neighborSocket)
+
+        neighborSocket.emit('auth', argv.port, (ok) => {
+          console.info('addPeer::auth to', port, neighborSocket.id, '->', ok)
+          callback(ok)
+        })
+
+        getKeysAndSetUnknow(neighborSocket)
+      })
+    }
+  })
+
+  socket.on('auth', function (port, callback) {
+    console.info('auth', port, socket.id)
+    if (neighbors.includes(port)) {
+      callback(false)
+    } else {
+      neighbors.push(port)
+      sockets.push(socket)
+
+      getKeysAndSetUnknow(socket)
+
+      callback(true)
+    }
   })
 }
 
@@ -54,9 +129,6 @@ const io = require('socket.io')(argv.port, {
 })
 
 console.info(`Serveur lancé sur le port ${argv.port}.`)
-
-// Création de la DB
-const db = Object.create(null)
 
 // À chaque nouvelle connexion
 io.on('connect', (socket) => {
