@@ -27,17 +27,41 @@ const neighbors = []
 const sockets = []
 
 function getKeysAndSetUnknow (socket) {
-  socket.emit('keys', (keys) => {
+  socket.emit('keysAndTime', (keys) => {
     console.info('addPeer::keys to', socket.id, '->', keys)
-    keys.forEach((key, i) => {
-      if (!db[key]) {
-        socket.emit('get', key, (value) => {
-          console.info('addPeer::get', key, ' to', socket.id, '->', value)
-          db[key] = value
-        })
+    for (const key in keys) {
+      if (keys.hasOwnProperty(key)) {
+        if (!db[key] || db[key].timestamp > keys[key].timestamp) {
+          socket.emit('get', key, (value) => {
+            console.info('addPeer::get', key, ' to', socket.id, '->', value)
+            updateField(key, value.value, value.timestamp)
+          })
+        }
       }
+    }
+  })
+}
+
+function updateField (field, value, timestamp) {
+  db[field] = {
+    value: value,
+    timestamp: timestamp
+  }
+
+  sockets.forEach((socket, index) => {
+    socket.emit('set', field, value, timestamp, (ok) => {
+      console.info('set to', socket.id, '->', ok)
     })
   })
+}
+
+const extractHorodatage = function (db) {
+  return Object.keys(db).reduce(function (result, key) {
+    result[key] = {
+      timestamp: db[key].timestamp
+    }
+    return result
+  }, {})
 }
 
 // Initialisation d'une socket
@@ -47,9 +71,22 @@ function initSocket (socket) {
     callback(db[field]) // lit et renvoie la valeur associée à la clef.
   })
 
-  socket.on('set', function (field, value, callback) {
+  socket.on('set', function (field, value, timestamp, callback) {
+    // Dans le cas où il n'y a que deux paramètres, le callback est dans timestamp
+    if (typeof timestamp === 'function') {
+      // on réaffecte les valeurs aux bonnes variables
+      callback = timestamp
+      timestamp = Date.now()
+    }
+
     if (field in db) { // Si la clef est dans la base de donnée
-      if (db[field] === value) {
+      if (db[field].timestamp > timestamp) {
+        updateField(field, value, timestamp)
+        callback(true)
+      } else if (db[field].timestamp < timestamp) {
+        console.info(`set error for field ${field} : the timestamp is too recent.`)
+        callback(false)
+      } else if (db[field].timestamp === timestamp && db[field].value === value) {
         callback(true)
       } else {
         console.info(`set error : Field ${field} exists.`)
@@ -58,13 +95,7 @@ function initSocket (socket) {
     } else {
       console.info(`set ${field} : ${value}`)
 
-      db[field] = value
-
-      sockets.forEach((socket, index) => {
-        socket.emit('set', field, value, (ok) => {
-          console.info('set to', socket.id, '->', ok)
-        })
-      })
+      updateField(field, value, timestamp)
 
       callback(true)
     }
@@ -73,6 +104,11 @@ function initSocket (socket) {
   socket.on('keys', function (callback) {
     console.info('keys')
     callback(Object.keys(db)) // Object.keys() extrait la liste des clefs d'un object et les renvoie sous forme d'un tableau.
+  })
+
+  socket.on('keysAndTime', function (callback) {
+    console.info('keysAndTime')
+    callback(extractHorodatage(db))
   })
 
   socket.on('peers', function (callback) {
