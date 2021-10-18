@@ -4,7 +4,7 @@ const argv = require('yargs') // Analyse des paramètres
   .command('get <key>', 'Récupère la valeur associé à la clé')
   .command('set <key> <value> [timestamp]', 'Place une association clé / valeur')
   .command('keys', 'Demande la liste des clés')
-  .command('KeysAndTime', 'Demande la liste des clés avec le temps')
+  .command('keysAndTime', 'Demande la liste des clés avec le temps')
   .command('addPeer <peerPort>', 'Ajoute un nouveau noeud voisin')
   .command('peers', 'Demande la liste des pairs du noeud')
   .command('version', 'Demande la version du CLI')
@@ -145,11 +145,11 @@ socket.on('connect', () => {
             end();
           });
           break;
-        case 'KeysAndTime':
+        case 'keysAndTime':
           if (!argv.bot) {
-            console.info(`KeysAndTime =>`);
+            console.info(`keysAndTime =>`);
           }
-          socket.emit('KeysAndTime', (keys) => {
+          socket.emit('keysAndTime', (keys) => {
             console.info(keys.join(','));
             end();
           });
