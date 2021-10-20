@@ -111,7 +111,7 @@ socket.on('connect', () => {
             console.info(`Commande get ${argv.key} =>`);
           }
           socket.emit('get', argv.key, (value) => {
-            if (typeof value === 'object') {
+            if (value && typeof value === 'object') {
               console.info(value.value);
             } else {
               console.info(value);
@@ -150,7 +150,7 @@ socket.on('connect', () => {
             console.info(`KeysAndTime =>`);
           }
           socket.emit('KeysAndTime', (keys) => {
-            console.info(keys.join(','));
+            console.info(keys);
             end();
           });
           break;
@@ -169,6 +169,15 @@ socket.on('connect', () => {
           }
           socket.emit('peers', (peers) => {
             console.info(peers.join(','));
+            end();
+          });
+          break;
+        case 'last':
+          if (!argv.bot) {
+            console.info(`last =>`);
+          }
+          socket.emit('last', (block) => {
+            console.info(block);
             end();
           });
           break;
