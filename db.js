@@ -20,51 +20,95 @@ if (argv.version) {
 }
 
 const ioClient = require('socket.io-client')
-const crypto = require('crypto')
+
+const Block = require('./Block.js')
 
 // Création de la DB
 const db = Object.create(null)
 const neighbors = []
 const sockets = []
+const blockchain = []
 
-function getKeysAndSetUnknow (socket) {
-  socket.emit('keysAndTime', (keys) => {
-    console.info('addPeer::keys to', socket.id, '->', keys)
-    for (const key in keys) {
-      if (keys.hasOwnProperty(key)) {
-        if (!db[key] || db[key].timestamp > keys[key].timestamp || (db[key].timestamp === keys[key].timestamp && db[key].hash > keys[key].hash)) {
-          socket.emit('get', key, (value) => {
-            console.info('addPeer::get', key, ' to', socket.id, '->', value)
-            updateField(key, value.value, value.timestamp, value.hash)
-          })
-        }
-      }
-    }
+function findBlock (id) {
+  return blockchain.find((block) => {
+    return block.id === id
   })
 }
 
-function updateField (field, value, timestamp, hash) {
-  db[field] = {
-    value: value,
-    timestamp: timestamp,
-    hash: hash
-  }
-
-  sockets.forEach((socket, index) => {
-    socket.emit('set', field, value, timestamp, (ok) => {
-      console.info('set to', socket.id, '->', ok)
+function syncBlockchain (socket) {
+  socket.emit('last', (block) => {
+    console.info('syncBlockchain::last to', socket.id, '->', block)
+    if (!block) {
+      return
+    }
+    syncBlock(socket, block, (ok, blocks) => {
+      if (ok) {
+        blocks.forEach((block, i) => {
+          updateBlockchain(block)
+        })
+      }
     })
   })
 }
 
-const extractHorodatage = function (db) {
-  return Object.keys(db).reduce(function (result, key) {
-    result[key] = {
-      timestamp: db[key].timestamp,
-      hash: db[key].hash
+function syncBlock (socket, block, callback) {
+  const find = findBlock(block.id)
+
+  if (find) {
+    if (
+      block.index === find.index &&
+      block.previous === find.previous &&
+      block.key === find.key &&
+      block.value === find.value &&
+      block.nonce === find.nonce
+    ) {
+      return callback(true, [block])
+    } else {
+      console.info(`syncBlock error : block ${block.id} diverge.`)
+      return callback(false)
     }
-    return result
-  }, {})
+  } else if (!block.previous) {
+    if (block.index === 0) {
+      return callback(true, [block])
+    } else {
+      console.info(`syncBlock error : block ${block.id} with index ${block.index} must have previous.`)
+      return callback(false)
+    }
+  } else {
+    const previous = findBlock(block.previous)
+
+    if (previous) {
+      if (previous.index === block.index - 1) {
+        return callback(true, [block])
+      } else {
+        console.info(`syncBlock error : block ${block.id} and ${previous.id} not have index increment.`)
+        return callback(false)
+      }
+    } else {
+      socket.emit('block', block.index - 1, (prev) => {
+        console.info('syncBlock::block', block.index - 1, 'to', socket.id, '->', prev)
+        if (!prev) {
+          return callback(false)
+        } else {
+          return syncBlock(socket, prev, (ok, list = []) => {
+            callback(ok, list.concat([block]))
+          })
+        }
+      })
+    }
+  }
+}
+
+function updateBlockchain (block) {
+  console.log('updateBlockchain index', block.index, 'and key / value', block.key, '/', block.value)
+  blockchain.push(block)
+  db[block.key] = block
+
+  sockets.forEach((socket, index) => {
+    socket.emit('setBlock', block, (ok) => {
+      console.info('setBlock to', socket.id, '->', ok)
+    })
+  })
 }
 
 // Initialisation d'une socket
@@ -74,53 +118,48 @@ function initSocket (socket) {
     callback(db[field]) // lit et renvoie la valeur associée à la clef.
   })
 
-  socket.on('set', function (field, value, timestamp, callback) {
-    // Dans le cas où il n'y a que deux paramètres, le callback est dans timestamp
-    if (typeof timestamp === 'function') {
-      // on réaffecte les valeurs aux bonnes variables
-      callback = timestamp
-      timestamp = Date.now()
-    }
-
-    const hash = crypto.createHash('sha256').update(value, 'utf8').digest('hex')
-
+  socket.on('set', function (field, value, callback) {
     if (field in db) { // Si la clef est dans la base de donnée
-      if (db[field].timestamp > timestamp) {
-        updateField(field, value, timestamp, hash)
-        callback(true)
-      } else if (db[field].timestamp < timestamp) {
-        console.info(`set error for field ${field} : the timestamp is too recent.`)
-        callback(false)
-      } else if (db[field].timestamp === timestamp) {
-        if (db[field].value === value) {
-          callback(true)
-        } else if (db[field].hash <= hash) {
-          callback(false)
-        } else {
-          updateField(field, value, timestamp, hash)
-          callback(true)
-        }
-      } else {
-        console.info(`set error : Field ${field} exists.`)
-        callback(false)
-      }
+      console.info(`set error : Field ${field} exists.`)
+      callback(false)
     } else {
       console.info(`set ${field} : ${value}`)
 
-      updateField(field, value, timestamp, hash)
+      const block = new Block(blockchain.length, blockchain[blockchain.length - 1]?.id, field, value)
+
+      block.pow()
+      updateBlockchain(block)
 
       callback(true)
+    }
+  })
+
+  socket.on('setBlock', function (block, callback) {
+    block = new Block(block.index, block.previous, block.key, block.value, block.nonce)
+
+    if (!block.isValid()) {
+      console.info(`setBlock error : block not valid.`)
+      callback(false)
+    } else if (block.index < blockchain.length) {
+      console.info(`setBlock error : block index to small.`)
+      callback(false)
+    } else {
+      syncBlock(socket, block, (ok, blocks) => {
+        if (ok) {
+          blocks.forEach((block, i) => {
+            updateBlockchain(block)
+          })
+          callback(ok)
+        } else {
+          callback(ok)
+        }
+      })
     }
   })
 
   socket.on('keys', function (callback) {
     console.info('keys')
     callback(Object.keys(db)) // Object.keys() extrait la liste des clefs d'un object et les renvoie sous forme d'un tableau.
-  })
-
-  socket.on('keysAndTime', function (callback) {
-    console.info('keysAndTime')
-    callback(extractHorodatage(db))
   })
 
   socket.on('peers', function (callback) {
@@ -150,7 +189,7 @@ function initSocket (socket) {
           callback(ok)
         })
 
-        getKeysAndSetUnknow(neighborSocket)
+        syncBlockchain(neighborSocket)
       })
     }
   })
@@ -163,10 +202,20 @@ function initSocket (socket) {
       neighbors.push(port)
       sockets.push(socket)
 
-      getKeysAndSetUnknow(socket)
+      syncBlockchain(socket)
 
       callback(true)
     }
+  })
+
+  socket.on('last', function (callback) {
+    console.info('last')
+    callback(blockchain[blockchain.length - 1])
+  })
+
+  socket.on('block', function (index, callback) {
+    console.info('block', index)
+    callback(blockchain[index])
   })
 }
 
