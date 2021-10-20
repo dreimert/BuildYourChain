@@ -8,6 +8,7 @@ const argv = require('yargs') // Analyse des paramètres
   .command('addPeer <peerPort>', 'Ajoute un nouveau noeud voisin')
   .command('peers', 'Demande la liste des pairs du noeud')
   .command('last', 'Demande le dernier block de la blockchain')
+  .command('block <index>', 'Demande le block à l\'index indiqué de la blockchain')
   .command('version', 'Demande la version du CLI')
   .option('url', {
     alias: 'u',
@@ -178,6 +179,15 @@ socket.on('connect', () => {
             console.info(`last =>`);
           }
           socket.emit('last', (block) => {
+            console.info(block);
+            end();
+          });
+          break;
+        case 'block':
+          if (!argv.bot) {
+            console.info(`block =>`);
+          }
+          socket.emit('block', argv.index, (block) => {
             console.info(block);
             end();
           });
